@@ -1,158 +1,150 @@
 import re
-
-import numpy as np
 import numpy.linalg as npl
-from models.extended_position_control_system import *
-import matplotlib.pyplot as plt
+from position_control_system.extended_model import *
+from position_control_system.common_data import *
 
 
-def re_ekf(n, m, s, f_name, init_theta, theta_true):
-    """ Процедура фильрации с помощью фильтра Калмана
+def re_ekf(init_theta, f_name, s):
+    """ Функция рекуррентного оценивания параметров
+        с импользованием расширенного фильтра Калмана
 
         Parameters
         ----------
-        n: int
-            Размерность вектора состояний
-        m: int
-            Размерность вектора измерений
-        n_obs: int
-            Число наблюдений эксперимента
-        x0: ndarray
-            n-вектор-столбец начального состояния процесса
-        y: ndarray
-            (n_obs x m)-массив всех наблюдений, в каждый момент времени
-        theta:
-            l-вектор параметров
+            init_theta: np.ndarray
+                s-вектор начальных значений параметров
+            f_name: str
+                имя файла с данными наблюдений
+            s: int
+                размер вектора параметров
 
         Returns
-        -------
-        x_filtered, y_filtered: ndarray, ndarray
-            (n_obs x n)-массив векторов состояния процесса после процедуры фильтрации
-            в каждый момент времени,
-            (n_obs x m)-массив векторов наблюдения после процедуры фильтрации
-            в каждый момент времени
-        """
+        ----------
+            theta_est: np.ndarray
+                (N + 1) x s-вектор оценок параметров
+    """
 
-    # блок подготовки
+    # Блок подготовки
     # -----------------------------------------
     # Инициализация начальных условия для работы фильтра
+    n, m, r = get_data()
     x_prev = get_x0(init_theta)
     p_prev = get_P0()
-    x_filtered = np.array([x_prev])
+    x_filtered = np.array([x_prev[n - s:]])
     t = get_t0()
     N = 0
     # -----------------------------------------
+    # Открытие файла с данными наблюдений для чтения
     with open(f_name, 'r') as f:
+        # Считывание нового наблюдения, если оно есть
         for line in f:
-            # Ввод данных
+            # Сохранение считанного наблюдения в нужном формате
             y = np.array(re.split('[ 	]', line)).astype(np.float)
+            # Увеличение счетчика наблюдений на единицу
             N += 1
 
-            # блок предсказания
+            # Блок предсказания
             # -----------------------------------------
             x_prediction, p_prediction = prediction(x_prev, p_prev, t)
             x_prediction = np.reshape(x_prediction, n)
             # -----------------------------------------
 
-            # блок коррекции
+            # Блок коррекции
             # -----------------------------------------
             t = get_t_next(t)
             x_prev, p_prev = update(n, x_prediction, p_prediction, y, t)
-            x_filtered = np.append(x_filtered, np.array([x_prev]), axis=0)
+            # Сохранение полученной оценки
+            x_filtered = np.append(x_filtered, np.array([x_prev[n - s:]]), axis=0)
             # -----------------------------------------
-    visualize_filter_results_theta(N, n, s, x_filtered, theta_true)
-    return x_filtered[N][n - s:]
+
+    return x_filtered
 
 
-def prediction(x_prev, p_prev, t):
-    """ Блок предсказания для непрерывно-дискретного фильтра Калмана
+def prediction(x_prev, p_prev, t) -> tuple[np.ndarray, np.ndarray]:
+    """ Блок предсказания для расширенного фильтра Калмана
 
-    Parameters
-    ----------
-    n: int
-        Размерность вектора состояний
-    x_prev: ndarray
-        n-вектор состояния на предыдущем шаге по времени (x(tk|tk)))
-    p_prev: ndarray
-        (n x n)-матрица предсказания на предыдущем шаге по времени (P(tk|tk))
-    t_prev: float
-        Предыдущий момент времени
-    theta: ndarray
-        l-вектор параметров
-    Returns
-    -------
-    x_prediction, p_prediction: ndarray, ndarray
-        Предсказанный n-вектор состояния (x(tk+1|tk)), предсказанная (n x n)-матрица P(tk+1|tk)
+        Parameters
+        ----------
+            x_prev: ndarray
+                n-вектор состояния на предыдущем шаге по времени
+            p_prev: ndarray
+                (n x n)-ковариационная матрица ошибки оценивания
+                на предыдущем шаге по времени
+            t: float
+                текущий момент времени
+
+        Returns
+        -------
+            x_prediction, p_prediction: ndarray, ndarray
+                n-вектор оценки одношагового прогнозирования,
+                (n x n)-ковариационная матрица ошибки
+                одношагового прогнозирования
     """
-    # блок подготовки
+
+    # Обновление матриц модели
     # -----------------------------------------
     f = get_f(t, x_prev)
-    dfdx = get_dfdx(t, x_prev)
+    F = get_F(t, x_prev)
     psi = get_psi(t, x_prev)
     u = get_u(t)
     G = get_G(t)
     Q = get_Q(t)
     # -----------------------------------------
 
-    # Нахождение предсказанного вектора состояния x(tk+1|tk)
+    # Оценка одношагового прогнозирования
     x_prediction = f + psi @ u
 
-    # Нахождение матрицы предсказания P(tk+1|tk)
-    p_prediction = dfdx @ p_prev @ dfdx.T + G @ Q @ G.T
+    # Вычисление ковариационной матрицы ошибки
+    # одношагового прогнозирования
+    p_prediction = F @ p_prev @ F.T + G @ Q @ G.T
+
     return x_prediction, p_prediction
 
 
-def update(n, x_prediction, p_prediction, y_curr, t):
-    """ Блок коррекции для фильтра Калмана
+def update(n, x_prediction, p_prediction, y_curr, t) \
+        -> tuple[np.ndarray, np.ndarray]:
+    """ Блок коррекции для расширенного фильтра Калмана
 
-    Parameters
-    ----------
-    n: int
-        Размерность вектора состояний
-    m: int
-            Размерность вектора измерений
-    x_prediction: ndarray
-        Предсказанный n-вектор состояния (x(tk+1|tk))
-    p_prediction: ndarray
-        Предсказанная (n x n)-матрица P(tk+1|tk)
-    y_curr: ndarray
-        m-вектор измерений в текущий момент времени (y(tk+1))
+        Parameters
+        ----------
+            n: int
+                размер вектора состояния
+            x_prediction: ndarray
+                n-вектор оценки одношагового прогнозирования
+            p_prediction: ndarray
+                (n x n)-ковариационная матрица ошибки
+                одношагового прогнозирования
+            y_curr: ndarray
+                m-вектор измерения в текущий момент времени
+            t: float
+                текущий момент времени
 
-    Returns
-    -------
-    x_filtered, y_filtered, p_filtered: ndarray, ndarray, ndarray
-        n-вектор состояния процесса после процедуры коррекции (x(tk+1|tk+1))
-        m-вектор наблюдения после процедуры коррекции (y(tk+1|tk+1))
-        (n x n)-матрица предсказания P(tk+1|tk+1)
+        Returns
+        -------
+            x_filtered, p_filtered: ndarray, ndarray
+                n-вектор оценки фильтрации
+                (n x n)-ковариационная матрица ошибки оценивания
     """
-    # блок подготовки
+
+    # Обновление матриц модели
     # -----------------------------------------
     h = get_h(t, x_prediction)
-    dhdx = get_dhdx(t, x_prediction)
-    dhdx_t = dhdx.T
+    H = get_H(t, x_prediction)
     R = get_R(t, x_prediction)
     # -----------------------------------------
+
+    # Вычисление коэффициента усиления Калмана
+    # -----------------------------------------
+    b = H @ p_prediction @ H.T + R
+    k = p_prediction @ H.T @ npl.pinv(b)
+    # -----------------------------------------
+
+    # Оценка фильтрации
+    # -----------------------------------------
     e = y_curr - h
-    b = dhdx @ p_prediction @ dhdx_t + R
-    k = p_prediction @ dhdx_t @ npl.pinv(b)
-    x_filtered = x_prediction + k @ e            # Вычисление отфильтрованных состояний x(tk+1|tk+1)
-    p_filtered = (np.eye(n) - k @ dhdx) @ p_prediction             # Вычисление P(tk+1|tk+1)
+    x_filtered = x_prediction + k @ e
+    # -----------------------------------------
+
+    # Обновление ковариационной матрицы ошибки оценивания
+    p_filtered = (np.eye(n) - k @ H) @ p_prediction
+
     return x_filtered, p_filtered
-
-
-def visualize_filter_results_theta(N, n, s, x_filtered, theta_true):
-    iterations = np.array(np.arange(get_t0(), N + 1, get_t_step()))
-    plt.Figure()
-    theta = np.zeros((N + 1, s))
-    for j in range(N + 1):
-        theta[j] = theta_true
-
-    for i in range(s):
-        plt.subplot(s, 1, i + 1)
-        plt.plot(iterations, x_filtered[:, n-s+i], label='фильтр')
-        plt.plot(iterations, theta[:, i], label='истина')
-        plt.xlabel("k")
-        label = 'theta' + str(i+1)
-        plt.ylabel(label)
-        plt.legend()
-    plt.show()

@@ -2,24 +2,20 @@ import math
 import numpy as np
 
 
-def get_data() -> tuple[int, int, int, int, np.ndarray]:
+def get_data() -> tuple[int, int, int]:
     """ Функция получения общей информации об исследуемой модели
 
         Returns
         -------
-            n, m, r, s, theta_true: int, int, int, int, np.ndarray
+            n, m, r: int, int, int
                 размер вектора состояний,
                 размер вектора измерений,
-                размер вектора управления,
-                размер вектора параметров,
-                s-вектор истинных параметров.
+                размер вектора управления.
     """
     n = 2
     m = 1
     r = 1
-    s = 2
-    theta_true = np.array([4.6, 0.787])
-    return n, m, r, s, theta_true
+    return n, m, r
 
 
 def get_F(t, theta):
@@ -119,22 +115,6 @@ def get_dPsidtheta(t, theta):
     return np.array([dPsidtheta1, dPsidtheta2])
 
 
-def get_u(t):
-    """ Функция получения вектора управления
-
-        Parameters
-        ----------
-            t: float
-                текущий момент времени
-
-        Returns
-        -------
-            np.ndarray
-                r-вектор управления
-    """
-    return np.array([[75]])
-
-
 def get_H(t, theta):
     """ Функция получения матрицы измерения
 
@@ -175,24 +155,6 @@ def get_dHdtheta(t, theta):
     return np.array([dHdtheta1, dHdtheta2])
 
 
-def get_R(t, theta):
-    """ Функция получения ковариационной матрицы ошибки измерения
-
-        Parameters
-        ----------
-            theta: np.ndarray
-                s-вектор параметров
-            t: float
-                текущий момент времени
-
-        Returns
-        -------
-            np.ndarray
-                (m x m)-ковариационная матрица ошибки измерения
-    """
-    return np.array([[0.1]])
-
-
 def get_dRdtheta(t, theta):
     """ Функция получения матрицы значений частных производных
         ковариационной матрицы ошибки измерения по параметрам
@@ -213,6 +175,40 @@ def get_dRdtheta(t, theta):
     dRdtheta1 = [0]
     dRdtheta2 = [0]
     return np.array([dRdtheta1, dRdtheta2])
+
+
+def get_u(t):
+    """ Функция получения вектора управления
+
+        Parameters
+        ----------
+            t: float
+                текущий момент времени
+
+        Returns
+        -------
+            np.ndarray
+                r-вектор управления
+    """
+    return np.array([[75]])
+
+
+def get_R(t, theta):
+    """ Функция получения ковариационной матрицы ошибки измерения
+
+        Parameters
+        ----------
+            theta: np.ndarray
+                s-вектор параметров
+            t: float
+                текущий момент времени
+
+        Returns
+        -------
+            np.ndarray
+                (m x m)-ковариационная матрица ошибки измерения
+    """
+    return np.array([[0.1]])
 
 
 def get_xt0():
@@ -242,42 +238,3 @@ def get_dxt0dtheta():
     dxt0dtheta2 = [[0],
                    [0]]
     return np.array([dxt0dtheta1, dxt0dtheta2])
-
-
-def get_t0():
-    """ Функция получения начального момента времени
-
-        Returns
-        -------
-            float
-                начальный момент времени
-    """
-    return 0.
-
-
-def get_t_step():
-    """ Функция получения шага времени
-
-        Returns
-        -------
-            float
-                шаг времени
-    """
-    return 1.
-
-
-def get_t_next(t_prev):
-    """ Функция получения следубщего момента времени
-
-        Parameters
-        ----------
-            t_prev: float
-                предыдущий момент времени
-
-        Returns
-        -------
-            float
-                следующий момент времени
-    """
-    step = get_t_step()
-    return t_prev + step

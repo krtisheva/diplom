@@ -1,25 +1,21 @@
 import math
 
 
-def relative_error_theta(theta_true, theta_est, s):
+def relative_error_theta_i(theta_true, theta_est):
     """ Функция вычисления относительной ошибки
-        в пространстве параметров
+        оценки параметра
 
         Parameters
         ----------
             theta_true: np.ndarray
-                s-вектор значений истинных параметров
+                истинное значение параметра
             theta_est: np.ndarray
-                s-вектор значений оценок неизвестных параметров
-            s: int
-                размер вектора параметров
+                оценка параметра
 
         Returns
         ----------
             float
-                относительноая ошибка в пространстве параметров
+                относительноая ошибка оценки параметра
     """
-    error = 0.
-    for i in range(s):
-        error += math.fabs(theta_est[i] - theta_true[i]) / math.fabs(theta_true[i])
-    return error / s
+    error = math.fabs(theta_est - theta_true) / math.fabs(theta_true)
+    return error

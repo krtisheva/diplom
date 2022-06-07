@@ -1,4 +1,5 @@
-from models.position_control_system import *
+from position_control_system.conventional_model import *
+from position_control_system.common_data import *
 import numpy as np
 import numpy.linalg as npl
 
@@ -55,6 +56,7 @@ def grad_imf_evaluation(theta, N, n, m, r, s, y) \
                 s-вектор градиента критерия максимального
                 правдоподобия.
     """
+
     # Блок подготовки
     # -----------------------------------------
     # Выделение памяти
@@ -68,6 +70,7 @@ def grad_imf_evaluation(theta, N, n, m, r, s, y) \
     for i in range(s):
         xA[(i + 1) * n:(i + 2) * n] = dxt0dtheta[i]
     # -----------------------------------------
+
     t = get_t0()
     for k in range(N):
         # Обновления матриц модели
